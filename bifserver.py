@@ -11,6 +11,14 @@ import Queue
 import threading
 import re
 
+# Set ENV Var
+interval = 10
+thread_count = 0
+default_res = 320
+
+# Set PATH
+tmpdir = "./biftemp"
+
 devnull=open(os.devnull)
 bif_queue = Queue.LifoQueue()
 
@@ -25,12 +33,10 @@ def intbytes(value):
 
 def process_bif_queue():
 
-  # TODO: perhaps make these options configurable
-  interval = 15
-
   while True:
     print("Background thread waiting for next queued bif creation request")
     sys.stdout.flush()
+    print("Left: "+str(bif_queue.qsize()))
     args = bif_queue.get()
     video_path = args[0]
     bif_path = args[1]
@@ -42,7 +48,6 @@ def process_bif_queue():
         print("Generating bif for: "+video_path)
         sys.stdout.flush()
 
-        tmpdir = bif_path+".tmp"
         bif_file = None
         try:
 
@@ -77,7 +82,7 @@ def process_bif_queue():
           sys.stdout.flush()
           if not os.path.isdir(tmpdir):
             os.mkdir(tmpdir)
-            ffmpeg= [ffmpeg_bin_prefix+"ffmpeg", "-i", video_path, "-s", resolution, "-r", "1", tmpdir+"/%016d.jpg"]
+            ffmpeg= [ffmpeg_bin_prefix+"ffmpeg", "-i", video_path, "-s", resolution, "-threads", str(thread_count), "-r", "1", tmpdir+"/%016d.jpg"]
             print(ffmpeg)
             sys.stdout.flush()
             if subprocess.call(ffmpeg, stdout=devnull, stderr=devnull):
@@ -163,6 +168,7 @@ class RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
           raise Exception("Not Found")
 
       # If it does not yet exist...
+      bif_path = os.path.dirname(bif_path)+"/"+os.path.basename(bif_path).split(".",1)[0]+"-"+str(default_res)+"-"+str(interval)+".bif"
       if not os.path.isfile(bif_path):
         # Queue a request to have a bif created for the video file.
         bif_queue.put([video_path, bif_path, hd])
@@ -199,7 +205,7 @@ else:
 threading.Thread(target=process_bif_queue).start()
 server = BaseHTTPServer.HTTPServer(('0.0.0.0', port), RequestHandler)
 sa = server.socket.getsockname()
-print "Serving HTTP on", sa[0], "port", sa[1], "..."
+print("Serving HTTP on "+str(sa[0])+":"+str(sa[1])+"...")
 sys.stdout.flush()
 server.serve_forever()
 
